@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartResize — Custom Control</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background: var(--card);
+            padding: 2rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            max-width: 550px;
+            width: 100%;
+        }
+
+        h1 { font-size: 1.5rem; font-weight: 800; text-align: center; margin-top: 0; }
+        
+        /* Drop Zone */
+        #drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 1rem;
+            padding: 2.5rem 1rem;
+            text-align: center;
+            transition: all 0.2s ease;
+            background: #fafafa;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+
+        #drop-zone.dragover { border-color: var(--primary); background: #eef2ff; }
+        #file-input { display: none; }
+
+        /* Controls Section */
+        #controls {
+            display: none;
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 1rem;
+            border: 1px solid var(--border);
+        }
+
+        .control-group { margin-bottom: 1.2rem; }
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 1.5rem 0;
+            text-align: center;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+        }
+
+        .stat-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; }
+        .stat-value { font-size: 0.9rem; font-weight: 700; display: block; }
+
+        .btn-download {
+            display: block;
+            background: var(--primary);
+            color: white;
+            text-align: center;
+            padding: 0.8rem;
+            text-decoration: none;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            transition: 0.2s;
+        }
+
+        .btn-download:hover { background: var(--primary-hover); }
+
+        #preview-img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>SmartResize</h1>
+    
+    <div id="drop-zone">
+        <div style="font-size: 2rem;">🖼️</div>
+        <div style="font-weight: 600;">Klik atau Tarik Foto Ke Sini</div>
+        <input type="file" id="file-input" accept="image/jpeg, image/png">
+    </div>
+
+    <div id="controls">
+        <img id="preview-img">
+        
+        <div class="control-group">
+            <label>Ukuran Dimensi: <span id="scale-val">50%</span></label>
+            <input type="range" id="scale-slider" min="10" max="100" value="50">
+        </div>
+
+        <div class="control-group">
+            <label>Kualitas (Kompresi KB): <span id="quality-val">80%</span></label>
+            <input type="range" id="quality-slider" min="5" max="100" value="80">
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-label">Dimensi Baru</span>
+                <span class="stat-value" id="dim-info">-</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">Estimasi Ukuran</span>
+                <span class="stat-value" id="size-info">-</span>
+            </div>
+        </div>
+
+        <a id="download-link" class="btn-download">Download Hasil</a>
+        <button onclick="location.reload()" style="width:100%; margin-top:10px; background:none; border:none; color:#94a3b8; cursor:pointer; font-size:0.8rem;">Ganti Foto</button>
+    </div>
+
+    <canvas id="hidden-canvas" style="display:none;"></canvas>
+</div>
+
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const controls = document.getElementById('controls');
+    const scaleSlider = document.getElementById('scale-slider');
+    const qualitySlider = document.getElementById('quality-slider');
+    const canvas = document.getElementById('hidden-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    let originalImage = new Image();
+    let fileName = "";
+
+    dropZone.onclick = () => fileInput.click();
+    fileInput.onchange = (e) => loadFile(e.target.files[0]);
+
+    // Drag and Drop Logic
+    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
+    dropZone.ondragleave = () => dropZone.classList.remove('dragover');
+    dropZone.ondrop = (e) => {
+        e.preventDefault();
+        loadFile(e.dataTransfer.files[0]);
+    };
+
+    function loadFile(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        fileName = file.name;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            originalImage.src = e.target.result;
+            originalImage.onload = () => {
+                dropZone.style.display = 'none';
+                controls.style.display = 'block';
+                processImage();
+            };
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function processImage() {
+        const scale = scaleSlider.value / 100;
+        const quality = qualitySlider.value / 100;
+
+        const w = Math.round(originalImage.width * scale);
+        const h = Math.round(originalImage.height * scale);
+
+        canvas.width = w;
+        canvas.height = h;
+        
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(originalImage, 0, 0, w, h);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        
+        // Update Info
+        document.getElementById('scale-val').innerText = scaleSlider.value + '%';
+        document.getElementById('quality-val').innerText = qualitySlider.value + '%';
+        document.getElementById('dim-info').innerText = `${w} x ${h}`;
+        
+        // Hitung estimasi KB
+        const stringLength = dataUrl.split(',')[1].length;
+        const sizeInBytes = Math.floor(stringLength * (3 / 4));
+        const sizeInKb = (sizeInBytes / 1024).toFixed(1);
+        document.getElementById('size-info').innerText = `${sizeInKb} KB`;
+
+        const downloadLink = document.getElementById('download-link');
+        downloadLink.href = dataUrl;
+        downloadLink.download = `resized-${fileName}`;
+    }
+
+    scaleSlider.oninput = processImage;
+    qualitySlider.oninput = processImage;
+
+</script>
+</body>
+</html>
