@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmartResize — Custom Control</title>
+    <title>SmartResize — Batch & Custom Control</title>
     <style>
         :root {
             --primary: #6366f1;
@@ -11,6 +11,7 @@
             --bg: #f1f5f9;
             --card: #ffffff;
             --text: #1e293b;
+            --text-muted: #64748b;
             --border: #e2e8f0;
         }
 
@@ -31,7 +32,7 @@
             padding: 2rem;
             border-radius: 1.5rem;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            max-width: 550px;
+            max-width: 600px;
             width: 100%;
         }
 
@@ -76,23 +77,59 @@
             cursor: pointer;
         }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+        /* Image List Section */
+        #image-list {
             margin: 1.5rem 0;
-            text-align: center;
+            max-height: 250px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-right: 5px;
         }
 
-        .stat-card {
+        /* Custom Scrollbar */
+        #image-list::-webkit-scrollbar { width: 6px; }
+        #image-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        #image-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        #image-list::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .img-card {
+            display: flex;
+            align-items: center;
             background: white;
-            padding: 0.75rem;
+            padding: 10px;
             border-radius: 0.75rem;
             border: 1px solid var(--border);
+            gap: 15px;
         }
 
-        .stat-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; }
-        .stat-value { font-size: 0.9rem; font-weight: 700; display: block; }
+        .img-card img {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 0.5rem;
+            background: #f1f5f9;
+        }
+
+        .img-info {
+            flex: 1;
+            font-size: 0.85rem;
+            overflow: hidden;
+        }
+
+        .img-info strong {
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 4px;
+        }
+
+        .img-stats {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
 
         .btn-download {
             display: block;
@@ -104,56 +141,45 @@
             border-radius: 0.75rem;
             font-weight: 600;
             transition: 0.2s;
+            cursor: pointer;
+            border: none;
+            width: 100%;
+            font-size: 1rem;
         }
 
         .btn-download:hover { background: var(--primary-hover); }
 
-        #preview-img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
-            display: none;
-        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>SmartResize</h1>
+    <h1>SmartResize Batch</h1>
     
     <div id="drop-zone">
-        <div style="font-size: 2rem;">🖼️</div>
-        <div style="font-weight: 600;">Klik atau Tarik Foto Ke Sini</div>
-        <input type="file" id="file-input" accept="image/jpeg, image/png">
+        <div style="font-size: 2.5rem; margin-bottom: 10px;">🖼️</div>
+        <div style="font-weight: 600;">Klik atau Tarik Beberapa Foto Ke Sini</div>
+        <div style="font-size: 0.8rem; color: #64748b; margin-top: 5px;">Mendukung banyak file sekaligus</div>
+        <!-- Tambahan atribut "multiple" agar bisa pilih banyak file -->
+        <input type="file" id="file-input" accept="image/jpeg, image/png, image/webp" multiple>
     </div>
 
     <div id="controls">
-        <img id="preview-img">
-        
         <div class="control-group">
             <label>Ukuran Dimensi: <span id="scale-val">50%</span></label>
             <input type="range" id="scale-slider" min="10" max="100" value="50">
         </div>
 
         <div class="control-group">
-            <label>Kualitas (Kompresi KB): <span id="quality-val">80%</span></label>
+            <label>Kualitas (Kompresi): <span id="quality-val">80%</span></label>
             <input type="range" id="quality-slider" min="5" max="100" value="80">
         </div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <span class="stat-label">Dimensi Baru</span>
-                <span class="stat-value" id="dim-info">-</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Estimasi Ukuran</span>
-                <span class="stat-value" id="size-info">-</span>
-            </div>
-        </div>
+        <!-- Daftar Foto -->
+        <div id="image-list"></div>
 
-        <a id="download-link" class="btn-download">Download Hasil</a>
-        <button onclick="location.reload()" style="width:100%; margin-top:10px; background:none; border:none; color:#94a3b8; cursor:pointer; font-size:0.8rem;">Ganti Foto</button>
+        <button id="download-btn" class="btn-download" onclick="downloadAll()">Download Semua</button>
+        <button onclick="location.reload()" style="width:100%; margin-top:15px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.85rem; font-weight: 600;">Ganti Foto / Mulai Ulang</button>
     </div>
 
     <canvas id="hidden-canvas" style="display:none;"></canvas>
@@ -165,73 +191,147 @@
     const controls = document.getElementById('controls');
     const scaleSlider = document.getElementById('scale-slider');
     const qualitySlider = document.getElementById('quality-slider');
+    const imageList = document.getElementById('image-list');
     const canvas = document.getElementById('hidden-canvas');
     const ctx = canvas.getContext('2d');
     
-    let originalImage = new Image();
-    let fileName = "";
+    // Array untuk menyimpan data seluruh foto yang diupload
+    let imagesData = [];
 
+    // Events untuk Upload File
     dropZone.onclick = () => fileInput.click();
-    fileInput.onchange = (e) => loadFile(e.target.files[0]);
+    fileInput.onchange = (e) => handleFiles(e.target.files);
 
-    // Drag and Drop Logic
+    // Drag and Drop Events
     dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
     dropZone.ondragleave = () => dropZone.classList.remove('dragover');
     dropZone.ondrop = (e) => {
         e.preventDefault();
-        loadFile(e.dataTransfer.files[0]);
+        dropZone.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
     };
 
-    function loadFile(file) {
-        if (!file || !file.type.startsWith('image/')) return;
-        fileName = file.name;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            originalImage.src = e.target.result;
-            originalImage.onload = () => {
-                dropZone.style.display = 'none';
-                controls.style.display = 'block';
-                processImage();
+    function handleFiles(files) {
+        if (!files || files.length === 0) return;
+        
+        dropZone.style.display = 'none';
+        controls.style.display = 'block';
+        imageList.innerHTML = '<div style="text-align:center; padding:20px; font-size:0.9rem;">Memuat gambar...</div>';
+        
+        imagesData = [];
+        let loadedCount = 0;
+        const validFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+
+        if (validFiles.length === 0) {
+            alert("Harap masukkan file gambar (JPG/PNG).");
+            location.reload();
+            return;
+        }
+
+        validFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = () => {
+                    // Simpan data asli gambar ke dalam array
+                    imagesData.push({
+                        name: file.name,
+                        type: file.type, // Simpan tipe asli (JPEG/PNG) untuk transparansi
+                        imgElement: img,
+                        origWidth: img.width,
+                        origHeight: img.height,
+                        processedUrl: '' 
+                    });
+                    
+                    loadedCount++;
+                    // Jika semua gambar selesai dimuat, proses resize
+                    if (loadedCount === validFiles.length) {
+                        processAllImages();
+                    }
+                };
             };
-        };
-        reader.readAsDataURL(file);
+            reader.readAsDataURL(file);
+        });
     }
 
-    function processImage() {
+    function processAllImages() {
         const scale = scaleSlider.value / 100;
         const quality = qualitySlider.value / 100;
 
-        const w = Math.round(originalImage.width * scale);
-        const h = Math.round(originalImage.height * scale);
-
-        canvas.width = w;
-        canvas.height = h;
-        
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(originalImage, 0, 0, w, h);
-
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
-        
-        // Update Info
         document.getElementById('scale-val').innerText = scaleSlider.value + '%';
         document.getElementById('quality-val').innerText = qualitySlider.value + '%';
-        document.getElementById('dim-info').innerText = `${w} x ${h}`;
         
-        // Hitung estimasi KB
-        const stringLength = dataUrl.split(',')[1].length;
-        const sizeInBytes = Math.floor(stringLength * (3 / 4));
-        const sizeInKb = (sizeInBytes / 1024).toFixed(1);
-        document.getElementById('size-info').innerText = `${sizeInKb} KB`;
+        imageList.innerHTML = ''; // Kosongkan daftar sebelum merender ulang
 
-        const downloadLink = document.getElementById('download-link');
-        downloadLink.href = dataUrl;
-        downloadLink.download = `resized-${fileName}`;
+        imagesData.forEach(data => {
+            const w = Math.round(data.origWidth * scale);
+            const h = Math.round(data.origHeight * scale);
+
+            canvas.width = w;
+            canvas.height = h;
+            
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            // Bersihkan canvas agar PNG transparan tidak menumpuk
+            ctx.clearRect(0, 0, w, h); 
+            ctx.drawImage(data.imgElement, 0, 0, w, h);
+
+            // Export menggunakan tipe file aslinya (mempertahankan transparansi PNG)
+            const dataUrl = canvas.toDataURL(data.type, quality);
+            data.processedUrl = dataUrl;
+            
+            // Hitung estimasi KB
+            const stringLength = dataUrl.split(',')[1].length;
+            const sizeInBytes = Math.floor(stringLength * (3 / 4));
+            const sizeInKb = (sizeInBytes / 1024).toFixed(1);
+
+            // Render ke UI
+            const card = document.createElement('div');
+            card.className = 'img-card';
+            card.innerHTML = `
+                <img src="${dataUrl}" alt="thumbnail">
+                <div class="img-info">
+                    <strong>${data.name}</strong>
+                    <div class="img-stats">Dimensi: ${w} x ${h} | Ukuran: ${sizeInKb} KB</div>
+                </div>
+            `;
+            imageList.appendChild(card);
+        });
     }
 
-    scaleSlider.oninput = processImage;
-    qualitySlider.oninput = processImage;
+    // Panggil ulang proses saat slider digeser
+    scaleSlider.oninput = processAllImages;
+    qualitySlider.oninput = processAllImages;
 
+    // Fungsi Download Semua Foto
+    function downloadAll() {
+        if (imagesData.length === 0) return;
+        
+        const btn = document.getElementById('download-btn');
+        btn.innerText = "Mendownload...";
+        btn.style.pointerEvents = "none";
+
+        // Menggunakan setTimeout/delay agar browser tidak memblokir multiple download
+        imagesData.forEach((data, index) => {
+            setTimeout(() => {
+                const a = document.createElement('a');
+                a.href = data.processedUrl;
+                a.download = `resized-${data.name}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                // Kembalikan tombol ke semula jika sudah di foto terakhir
+                if (index === imagesData.length - 1) {
+                    setTimeout(() => {
+                        btn.innerText = "Download Semua";
+                        btn.style.pointerEvents = "auto";
+                    }, 500);
+                }
+            }, index * 300); // Jeda 300ms per foto
+        });
+    }
 </script>
 </body>
 </html>
